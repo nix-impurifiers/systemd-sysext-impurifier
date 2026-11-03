@@ -86,3 +86,19 @@ read-only images, atomic image replacement, lifecycle retry, administrator
 intent, real reboot after GC, and native unmerge/removal. The NixOS fixture makes
 native unit directories writable while preserving dependency symlinks; this does
 not claim arbitrary declarative NixOS service-enablement compatibility.
+
+## Native payloads and bundled clients
+
+`makeNativeExtension { payload; name?; osRelease?; }` creates a SquashFS
+extension from a producer-prepared `/usr` tree. It contains no implicit engine,
+activation boot code, Python or Nix requirement. Native systemd-sysext owns the
+merged view; the producer supplies a working target layout without relocation.
+The VM merges, executes, upgrades and unmerges an actual image in a separate root
+without `/nix` or the engine. Files outside `/usr` and collisions are rejected.
+
+Nix-backed `makeExtension` accepts `bundledNixStore` and `bundledNixNotices` for
+a static ELF client and its upstream notices. A compatible external client takes
+precedence; explicit `IMPURIFIER_NIX_STORE` disables fallback and failed mutations
+are never retried through another client. Python remains required. A separate
+bundled-client VM repeats the original image lifecycle and reboot suite with an
+incompatible external candidate. Nix provisioning remains deferred.

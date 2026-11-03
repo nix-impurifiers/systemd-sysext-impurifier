@@ -34,6 +34,25 @@
         };
       };
       formatter = pkgs.nixfmt-tree;
-      checks = import ../../../tests { inherit pkgs impurifier; };
+      checks = (import ../../../tests { inherit pkgs impurifier; }) // {
+        bundled-vm =
+          (import ../../../tests {
+            inherit pkgs;
+            bundled = true;
+            impurifier = impurifier // {
+              makeExtension =
+                args:
+                impurifier.makeExtension (
+                  args
+                  // {
+                    bundledNixStore = "${
+                      import (inputs.impurifier + "/tests/static-nix.nix") { inherit pkgs; }
+                    }/bin/nix-store";
+                    bundledNixNotices = [ "${pkgs.nix.src}/COPYING" ];
+                  }
+                );
+            };
+          }).vm;
+      };
     };
 }

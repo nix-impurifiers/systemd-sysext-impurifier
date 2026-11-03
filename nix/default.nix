@@ -18,12 +18,19 @@ let
   };
   makeExtension =
     {
-      applications,
+      applications ? [ ],
+      nativePayloads ? [ ],
+      includeRuntime ? true,
+      bundledNixStore ? null,
+      bundledNixNotices ? [ ],
       name ? "nix-impurifiers",
       osRelease ? {
         ID = "_any";
       },
     }:
+    assert lib.assertMsg (
+      includeRuntime || applications == [ ]
+    ) "native-only extensions cannot contain engine application intent";
     assert lib.assertMsg (builtins.match "[a-z0-9][a-z0-9_.-]+" name != null) "invalid extension name";
     assert lib.assertMsg (
       osRelease ? ID
@@ -65,9 +72,15 @@ let
         unsafeDiscardReferences.out = true;
       }
       ''
-        python3 ${./merge.py} root ${core.makeRuntimeTree { }} ${lib.concatStringsSep " " (map toString payloads)}
-        test ! -e root/usr/lib/systemd-sysext-impurifier/boot.py
-        install -Dm644 ${./boot.py} root/usr/lib/systemd-sysext-impurifier/boot.py
+        python3 ${./merge.py} root ${
+          lib.optionalString includeRuntime (
+            toString (core.makeRuntimeTree { inherit bundledNixStore bundledNixNotices; })
+          )
+        } ${lib.concatStringsSep " " (map toString (payloads ++ nativePayloads))}
+        ${lib.optionalString includeRuntime ''
+          test ! -e root/usr/lib/systemd-sysext-impurifier/boot.py
+          install -Dm644 ${./boot.py} root/usr/lib/systemd-sysext-impurifier/boot.py
+        ''}
         test ! -e root/usr/lib/extension-release.d
         test ! -e root/usr/lib/systemd/system/systemd-sysext-impurifier.service
         mkdir -p root/usr/lib/extension-release.d "$out"
@@ -126,4 +139,20 @@ let
     '';
   };
 in
-core // { inherit makeExtension adapter bootUnit; }
+core
+// {
+  inherit makeExtension adapter bootUnit;
+  makeNativeExtension =
+    {
+      payload,
+      name ? "native-payload",
+      osRelease ? {
+        ID = "_any";
+      },
+    }:
+    makeExtension {
+      inherit name osRelease;
+      nativePayloads = [ payload ];
+      includeRuntime = false;
+    };
+}
